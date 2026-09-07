@@ -41,7 +41,11 @@ from . import config, logger, kobo_auth, db, calibre_db, helper, shelf as shelf_
 from . import isoLanguages
 from .epub import get_epub_layout
 from .constants import COVER_THUMBNAIL_SMALL, COVER_THUMBNAIL_MEDIUM, COVER_THUMBNAIL_LARGE, DEFAULT_PORT
-from .kobo_cover_cache import build_cover_image_id, normalize_cover_uuid
+from .kobo_cover_cache import (
+    MISSING_COVER_PNG,
+    build_cover_image_id,
+    normalize_cover_uuid,
+)
 from .helper import get_download_link
 from .services import SyncToken as SyncToken, hardcover
 from .web import download_required
@@ -1158,9 +1162,13 @@ def HandleCoverImageRequest(book_uuid, width, height, Quality, isGreyscale):
         return book_cover
 
     if not config.config_kobo_proxy:
-        log.debug("Returning 404 for cover image of unknown book %s" % book_uuid)
-        # additional proxy request make no sense, -> direct return
-        return abort(404)
+        # A device can request covers for stale CWA entitlements before it calls
+        # /v1/library/sync. A 404 aborts that pre-sync queue on current Kobo
+        # firmware, so return a valid placeholder and let sync continue.
+        log.debug("Returning placeholder cover image for unknown book %s" % book_uuid)
+        response = Response(MISSING_COVER_PNG, mimetype="image/png")
+        response.headers["Cache-Control"] = "no-store"
+        return response
 
     log.debug("Redirecting request for cover image of unknown book %s to Kobo" % book_uuid)
     return redirect(KOBO_IMAGEHOST_URL +

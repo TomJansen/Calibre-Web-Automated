@@ -11,9 +11,18 @@ These functions are intentionally dependency-light so they can be tested without
 importing the full application package.
 """
 
+import base64
 from datetime import datetime
 import os
 import uuid as uuidlib
+
+
+# A valid 1x1 PNG used when a Kobo requests a cover for a stale local
+# entitlement. Returning 404 can abort the device's pre-sync request queue.
+MISSING_COVER_PNG = base64.b64decode(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8A"
+    "AQUBAScY42YAAAAASUVORK5CYII="
+)
 
 
 def normalize_cover_uuid(image_id):

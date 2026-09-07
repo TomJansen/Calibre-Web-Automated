@@ -28,6 +28,10 @@ kobo_cache = _load_cover_cache_module()
 
 @pytest.mark.unit
 class TestKoboCoverImageId:
+    def test_missing_cover_placeholder_is_a_png(self):
+        assert kobo_cache.MISSING_COVER_PNG.startswith(b"\x89PNG\r\n\x1a\n")
+        assert kobo_cache.MISSING_COVER_PNG.endswith(b"IEND\xaeB`\x82")
+
     def test_normalize_cover_uuid_keeps_plain_uuid(self):
         value = str(uuidlib.uuid4())
         assert kobo_cache.normalize_cover_uuid(value) == value
