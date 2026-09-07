@@ -42,9 +42,14 @@ from . import isoLanguages
 from .epub import get_epub_layout
 from .constants import COVER_THUMBNAIL_SMALL, COVER_THUMBNAIL_MEDIUM, COVER_THUMBNAIL_LARGE, DEFAULT_PORT
 from .kobo_cover_cache import (
-    MISSING_COVER_PNG,
+    MISSING_COVER_JPEG,
     build_cover_image_id,
     normalize_cover_uuid,
+)
+from .kobo_stale_entitlements import (
+    create_removed_entitlement,
+    queue_unknown_entitlement,
+    take_unknown_entitlements,
 )
 from .helper import get_download_link
 from .services import SyncToken as SyncToken, hardcover
@@ -378,6 +383,17 @@ def HandleSyncRequest():
             new_reading_state_last_modified = max(new_reading_state_last_modified, kobo_reading_state.last_modified)
 
     sync_shelves(sync_token, sync_results, only_kobo_shelves)
+
+    stale_entitlements, more_stale_entitlements = take_unknown_entitlements(
+        current_user.id, SYNC_ITEM_LIMIT
+    )
+    if stale_entitlements:
+        log.info("Kobo Sync: Removing %d unknown cached entitlements", len(stale_entitlements))
+        sync_results.extend(
+            create_removed_entitlement(book_uuid)
+            for book_uuid in stale_entitlements
+        )
+    cont_sync |= more_stale_entitlements
 
     # Add magic shelves as collections
     if config.config_kobo_sync_magic_shelves:
@@ -1165,8 +1181,13 @@ def HandleCoverImageRequest(book_uuid, width, height, Quality, isGreyscale):
         # A device can request covers for stale CWA entitlements before it calls
         # /v1/library/sync. A 404 aborts that pre-sync queue on current Kobo
         # firmware, so return a valid placeholder and let sync continue.
-        log.debug("Returning placeholder cover image for unknown book %s" % book_uuid)
-        response = Response(MISSING_COVER_PNG, mimetype="image/png")
+        queued = queue_unknown_entitlement(current_user.id, book_uuid)
+        log.debug(
+            "Returning placeholder cover image for unknown book %s (queued for removal: %s)",
+            book_uuid,
+            queued,
+        )
+        response = Response(MISSING_COVER_JPEG, mimetype="image/jpeg")
         response.headers["Cache-Control"] = "no-store"
         return response
 
