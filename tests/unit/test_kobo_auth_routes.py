@@ -13,6 +13,7 @@ import pytest
 
 
 KOBO_MODULE = Path(__file__).resolve().parents[2] / "cps" / "kobo.py"
+MAIN_MODULE = Path(__file__).resolve().parents[2] / "cps" / "main.py"
 
 
 def _auth_request_routes():
@@ -56,3 +57,19 @@ def test_device_auth_handler_covers_first_pairing_and_refresh_routes():
     assert routes["/v1/auth/device"] == ["POST"]
     assert routes["/v1/auth/refresh"] == ["POST"]
     assert routes["/v1/user/add-device"] == ["POST"]
+
+
+@pytest.mark.unit
+def test_kobo_blueprint_has_no_global_rate_limit():
+    module = ast.parse(MAIN_MODULE.read_text(encoding="utf-8"))
+
+    for call in (node for node in ast.walk(module) if isinstance(node, ast.Call)):
+        if not call.args:
+            continue
+        assert not (
+            isinstance(call.args[0], ast.Name)
+            and call.args[0].id == "kobo"
+            and isinstance(call.func, ast.Call)
+            and isinstance(call.func.func, ast.Attribute)
+            and call.func.func.attr == "limit"
+        )
